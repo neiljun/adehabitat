@@ -13,7 +13,7 @@
     gr <- gridparameters(x)
     if (nrow(gr) > 2)
         stop("x should be defined in two dimensions")
-    if ((gr[1, 2] - gr[2, 2])> get(".adeoptions", envir=.adehabitatMAEnv)$epsilon)
+    if (abs(gr[1, 2] - gr[2, 2])> get(".adeoptions", envir=.adehabitatMAEnv)$epsilon)
         stop("the cellsize should be the same in x and y directions")
     if (!inherits(xy, "SpatialLines")) {
         if (ncol(coordinates(xy))>2)
@@ -77,10 +77,9 @@
     if (meth=="points.id") {
         id <- factor(xy[[1]])
         xy <- as.data.frame(coordinates(xy))
-
         lixy <- split(xy, id)
         res <- do.call("data.frame", lapply(lixy, function(z) {
-            bu <- buffer(SpatialPoints(z), x, dist)
+            bu <- buffer(SpatialPoints(z, proj4string=CRS(pfsx)), x, dist)
             return(bu[[1]])
         }))
         coordinates(res) <- coordinates(x)
@@ -106,12 +105,12 @@
                 z[,1]<-jitter(z[,1], amount=ra)
                 z[,2]<-jitter(z[,2], amount=ra)
 
-                bu <- buffer(SpatialPoints(z), x, dist)
+                bu <- buffer(SpatialPoints(z, proj4string=CRS(pfsx)), x, dist)
 
 
                 if (nrow(gr) > 2)
                     stop("sg should be defined in two dimensions")
-                if (gr[1, 2] != gr[2, 2])
+                if (abs(gr[1, 2] - gr[2, 2]) > get(".adeoptions", envir=.adehabitatMAEnv)$epsilon)
                     stop("the cellsize should be the same in x and y directions")
                 nRow <- gr[2, 3]
                 nCol <- gr[1, 3]
@@ -159,12 +158,11 @@
                 z[,1]<-jitter(z[,1], amount=ra)
                 z[,2]<-jitter(z[,2], amount=ra)
 
-                bu <- buffer(SpatialPoints(z), x, dist)
-
+                bu <- buffer(SpatialPoints(z, proj4string=CRS(pfsx)), x, dist)
 
                 if (nrow(gr) > 2)
                     stop("sg should be defined in two dimensions")
-                if (gr[1, 2] != gr[2, 2])
+                if (abs(gr[1, 2] - gr[2, 2]) > get(".adeoptions", envir=.adehabitatMAEnv)$epsilon)
                     stop("the cellsize should be the same in x and y directions")
                 nRow <- gr[2, 3]
                 nCol <- gr[1, 3]

@@ -56,11 +56,13 @@
       df<-dft[,c("x","y")]
 
       if (!is.list(gr)) {
-          if (length(as.vector(gr)) == 1) {
-              if (!is.numeric(gr))
-                  stop("non convenient grid")
-              if (!same4all) {
-                  grid <- .makegridUD(xy, gr, extent)
+          if (!inherits(grid, "SpatialPoints")) {
+              if (length(as.vector(gr)) == 1) {
+                  if (!is.numeric(gr))
+                      stop("non convenient grid")
+                  if (!same4all) {
+                      grid <- .makegridUD(xy, gr, extent)
+                  }
               }
           }
       } else {
