@@ -47,11 +47,11 @@ histniche(x, pr, type = c("h", "l"), adjust = 1,
 \dontrun{
 
 data(puechabonsp)
-cp <- count.points(puechabonsp$relocs, puechabonsp$maps)
-puechabonsp$maps
+cp <- count.points(puechabonsp$relocs, puechabonsp$map)
+puechabonsp$map
 
-histniche(slot(puechabonsp$maps, "data"), slot(cp, "data")[,1])
-histniche(slot(puechabonsp$maps, "data"), slot(cp, "data")[,1],
+histniche(slot(puechabonsp$map, "data"), slot(cp, "data")[,1])
+histniche(slot(puechabonsp$map, "data"), slot(cp, "data")[,1],
           ty="l")
 
 }

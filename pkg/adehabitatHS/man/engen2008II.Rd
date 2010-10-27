@@ -176,7 +176,7 @@ engen2008I(us, av, nsimra=500)
 ## Practical use of engen2008II
 
 data(puechabonsp)
-map <- puechabonsp$maps
+map <- puechabonsp$map
 
 ## Removes the aspect (no factor allowed in the function)
 slot(map,"data")$Aspect <- NULL

@@ -133,7 +133,7 @@ prepksel(sa, hr, locs)
 data(puechabonsp)
 
 locs <- puechabonsp$relocs
-map <- puechabonsp$maps
+map <- puechabonsp$map
 
 
 ## compute the home range of animals (e.g. using the minimum convex

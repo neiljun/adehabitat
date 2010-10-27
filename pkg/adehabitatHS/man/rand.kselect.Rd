@@ -83,7 +83,7 @@ rand.kselect(dudi, factor, weight, nrep = 200, alpha = 0.05, ewa = FALSE)
 data(puechabonsp)
 
 locs <- puechabonsp$relocs
-map <- puechabonsp$maps
+map <- puechabonsp$map
 
 
 ## compute the home range of animals (e.g. using the minimum convex

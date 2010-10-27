@@ -13,7 +13,7 @@ data(puechabonsp)
 }
 \details{
   The list \code{puechabonsp} has two components:\cr
-  \code{puechabonsp$maps}
+  \code{puechabonsp$map}
   is an  object of class \code{SpatialPixelsDataFrame} that describes several
   variables on the study area.\cr
   \code{puechabonsp$relocs} is an object of class \code{SpatialPointsDataFrame}
