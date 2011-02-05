@@ -171,9 +171,6 @@ image.estUD <- function(x, ...)
     if (!inherits(spdf, "SpatialPoints"))
         stop("spdf should be of class SpatialPoints")
     pfs1 <- proj4string(spdf)
-    pfs2 <- proj4string(sldf)
-    if (!identical(spdf, sldf))
-        stop("points and boundary are characterized by different projection system")
     cool <- coordinates(sldf)
     coop <- coordinates(spdf)
 
@@ -382,7 +379,8 @@ image.estUD <- function(x, ...)
 ## multiple UD estimation
 kernelUD <- function (xy, h = "href", grid = 60,
                       same4all = FALSE, hlim = c(0.1, 1.5),
-                      kern = c("bivnorm", "epa"), extent = 0.5)
+                      kern = c("bivnorm", "epa"), extent = 0.5,
+                      boundary = NULL)
 {
     ## Verifications
     if (!inherits(xy, "SpatialPoints"))
@@ -404,7 +402,6 @@ kernelUD <- function (xy, h = "href", grid = 60,
         id <- rep("a", nrow(as.data.frame(xy)))
         m <- 2
     }
-    boundary <- NULL
     if (!is.null(boundary)) {
         if (!inherits(boundary, "SpatialLines"))
             stop("the boundary should be an object of class SpatialLines")

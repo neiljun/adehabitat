@@ -42,3 +42,22 @@ id <- function(ltraj)
     attr(res, "regular") <- is.regular(res)
     return(res)
 }##OK
+
+
+"infolocs<-" <- function(ltraj, value)
+{
+    if (!inherits(ltraj, "ltraj"))
+        stop("ltraj should be of class ltraj")
+    if (length(value)!=length(ltraj))
+        stop("the assignment should be a list of the same length as ltraj")
+    for (i in (1:length(ltraj))) {
+        df <- value[[i]]
+        if (!inherits(df, "data.frame"))
+            stop("value should be a list of data.frame")
+        if (nrow(df)!=nrow(ltraj[[i]]))
+            stop(paste("The burst", i,
+                       "does not have the same number of elements in ltraj and value"))
+        attr(ltraj[[i]], "infolocs") <- df
+    }
+    return(ltraj)
+}

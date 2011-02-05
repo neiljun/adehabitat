@@ -18,7 +18,7 @@ the {\tt adehabitatLT} Package }
   Office national de la chasse et de la faune
   sauvage\\
   Saint Benoist -- 78610 Auffargis -- France.}
-\date{Oct 2008}
+\date{Jan 2011}
 
 \begin{document}
 
@@ -110,8 +110,6 @@ library(adehabitatLT)
 set.seed(13431)
 @
 
-\section{The class \texttt{ltraj}}
-
 \section{What is a trajectory?}
 
 \subsection{Two types of trajectories}
@@ -150,7 +148,6 @@ to deal with type I or type II regular trajectories. Irregular
 trajectories are harder to analyze, as the descriptive
 parameters of these trajectories (see below) may not be compared when
 computed on different time lags.
-
 
 
 \subsection{Descriptive parameters of the trajectory}
@@ -374,6 +371,88 @@ plot(puech)
 \end{center}
 
 
+\subsection{Two points of views: steps (ltraj) or points (data.frame)?}
+
+We noted in the previous section that, in \texttt{adehabitatLT}, we
+consider the trajectory as a collection of successive ``steps''
+ordered in time. We will see later in this vignette that most
+functions of \texttt{adehabitatLT} deal with trajectories considered
+from this point of view. However, several users
+(in particular, many thanks to Mathieu Basille and Bram van Moorter)
+noted that although this point of view may be useful to manage and
+analyse trajectories, it may be too restrictive to allow an easy
+management of such data.\\
+
+Actually, the trajectory data may also be considered as a set of
+successive \textit{points} (the relocations) ordered in time. At first
+sight, the distinction between these two models may seem trivial, but
+it is important to consider it in several cases.\\
+
+For example, any slight change in the coordinates/date of a relocation
+will change the value of all derived statistics (\texttt{dt},
+\texttt{dist}, etc.). In the previous versions of adehabitat, it was
+possible to change directly the values of coordinates/dates in the
+object, and then to compute again the steps characteristics thanks to
+the function \texttt{rec} (it is still possible in the present
+version, but not recommended).\\
+
+For example, consider the object \texttt{puech} created in the
+previous section. Have a look at the first relocations of the first burst:
+
+<<>>=
+head(puech[[1]])
+@
+
+Imagine that we realize that the X coordinate of the second relocation
+is actually equal to 700146 instead of 700046:
+
+<<>>=
+puech2 <- puech
+puech2[[1]][2,1] <- 700146
+head(puech2[[1]])
+@
+
+The coordinate has been changed, but the step characteristics are now
+incorrect. The function \texttt{rec} recompute these statistics
+according to these changes:
+
+<<>>=
+head(rec(puech2)[[1]])
+@
+
+Although the function \texttt{rec} can be useful for sporadic use, it
+is limited when a larger number of modifications is required on the
+relocations (e.g. filtering incorrect relocations when ``cleaning''
+GPS monitoring data). This is where the class \texttt{ltraj} does not
+fit. For such work, it is more convenient to see the trajectory as a set
+of points located in both space and time. And for such operations, it
+is sometimes more convenient to work with data frames. Two functions
+are provided to quickly convert a ltraj to and from data.frames: the
+functions \texttt{ld} and \texttt{dl}.
+
+The function \texttt{ld} allows to quickly convert an object of class
+\texttt{ltraj} to the class \texttt{data.frame}. Consider for example
+the object \texttt{puech} created in the previous section. We can
+quickly convert this object towards the class \texttt{data.frame}:
+
+<<>>=
+puech2 <- ld(puech)
+head(puech2)
+@
+
+Note that the data frame contains all the descriptors of the steps. In
+addition, two variables \texttt{burst} and \texttt{id} allow to
+quickly convert this object back towards the class \texttt{ltraj},
+with the function \texttt{dl}:
+
+<<>>=
+dl(puech2)
+@
+
+Using \texttt{dl} and \texttt{ld} can be extremey useful during the
+first steps of the analysis, especially during data ``cleaning''.
+
+
 
 
 \section{Managing objects of class \texttt{ltraj}}
@@ -585,7 +664,7 @@ place the missing values, as in the section \ref{sec:NA}. We define a
 reference date and place the missing values:
 
 <<>>=
-refda <- strptime("00:00", "%H:%M")
+refda <- strptime("2003-06-01 00:00", "%Y-%m-%d %H:%M")
 ib2 <- setNA(ibexraw, refda, 4, units = "hour")
 ib2
 @
@@ -712,7 +791,9 @@ these additional variables and the parameters of the trajectory.\\
 
 This meta information can be stored in the attribute \texttt{infolocs}
 of each burst. This should be defined when creating the object
-\texttt{ltraj}. For example, load the dataset \texttt{capreochiz}:
+\texttt{ltraj}, \textit{but can also be defined later} (see section
+\ref{sec:ras} for an example). For example, load the dataset
+\texttt{capreochiz}:
 
 <<>>=
 data(capreochiz)
@@ -780,7 +861,6 @@ plotltr(capreo, "log(Dop)")
 <<zfig>>
 @
 \end{center}
-
 
 
 
@@ -1488,6 +1568,158 @@ wawotest(res)
 @
 
 
+\subsection{Rasterizing a trajectory}
+\label{sec:ras}
+
+In some cases, it may be useful to rasterize a trajectory. In
+particular, when the aim of the study is to examine the habitat
+traversed by the animal, this approach may be useful. For example,
+consider the dataset \texttt{puechcirc}, containing 3 trajectories
+of 2 wild boars. It may be useful to identify the habitat traversed
+by the animal during each step. A habitat map is available in the
+dataset \texttt{puechabonsp}:
+
+<<label=imagerast1,echo=FALSE,fig=FALSE,eval=FALSE>>=
+data(puechcirc)
+data(puechabonsp)
+mimage(puechabonsp$map)
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<imagerast1>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<imagerast1>>
+<<zfig>>
+@
+\end{center}
+
+We can rasterize the trajectories of the wild boars:
+
+<<>>=
+ii <- rasterize.ltraj(puechcirc, puechabonsp$map)
+@
+
+The result is a list containing 3 objects of class
+"SpatialPointsDataFrame" (one per animal). Let us examine the first
+one:
+
+<<>>=
+tr1 <- ii[[1]]
+head(tr1)
+@
+
+This data frame contains the coordinates of the pixels traversed by
+each step. For example, the rasterized trajectory for the first animal
+is:
+
+<<label=ksdfjk,echo=FALSE,fig=FALSE,eval=FALSE>>=
+plot(tr1)
+points(tr1[tr1[[1]]==3,], col="red")
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<ksdfjk>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<ksdfjk>>
+<<zfig>>
+@
+\end{center}
+
+The red points indicate the pixels traversed by the third step.
+These results can be used to identify the habitat characteristics of
+each step. For example, we may calculate the mean elevation for each
+step. To proceed, we use the function \texttt{overlay} of the package
+sp.
+
+<<label=jklmmre,echo=FALSE,fig=FALSE,eval=FALSE>>=
+ov <- overlay(puechabonsp$map, tr1)
+mel <- puechabonsp$map[ov,]
+mo <- tapply(mel[[1]], tr1[[1]], mean)
+plot(mo, ty="l")
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<jklmmre>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<jklmmre>>
+<<zfig>>
+@
+\end{center}
+
+Here, we can see that the first animal stays on the plateau at the
+beginning at the monitoring, then goes down to the crops,
+and goes back to the plateau. It is easy to repeat the operation for
+all the animals. We will make use of the \texttt{infolocs}
+attribute. We first build a list containing data frames, each data
+frame containing on variable describing the mean elevation traversed
+by the animal between relocation $i-1$ and relocation $i$:
+
+
+<<>>=
+val <- lapply(1:length(ii), function(i) {
+
+    ## get the rasterized trajectory
+    tr <- ii[[i]]
+
+    ## overlay with the map
+    ov <- overlay(puechabonsp$map, tr)
+
+    ## get the pixels of the map
+    mel <- puechabonsp$map[ov,]
+
+    ## calculate the mean elevation
+    mo <- tapply(mel[[1]], tr[[1]], mean)
+
+    ## prepare the output
+    elev <- rep(NA, nrow(puechcirc[[i]]))
+
+    ## place the average values at the right place
+    ## names(mo) contains the step number (i.e. relocation
+    ## number +1)
+    elev[as.numeric(names(mo))+1] <- mo
+    return(data.frame(elevation = elev))
+})
+@
+
+\noindent Then, we define the \texttt{infolocs} attribute:
+
+<<>>=
+infolocs(puechcirc) <- val
+@
+
+\noindent and finally, we can plot the mean elevation as a function of
+date:
+
+<<label=ksdfjeiii,echo=FALSE,fig=FALSE,eval=FALSE>>=
+plotltr(puechcirc, "elevation")
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<ksdfjeiii>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<ksdfjeiii>>
+<<zfig>>
+@
+\end{center}
+
+
+
 \subsection{Models of animal movements}
 
 Several movement models have been proposed in the litteratured to
@@ -1559,9 +1791,11 @@ identify the areas where \textit{area restricted search} occur is
 implemented in the function \texttt{fpt}. Several methods are
 available in the package \texttt{adehabitatHR} to estimate a home
 range based on objects of class \texttt{ltraj}. Thus, the Brownian
-bridge kernel method (Bullard 1999, Horne et al. 2007) and the product
-kernel algorithm (Keating and Cherry 2009) are implemented in the functions
-\texttt{kernelbb} and \texttt{kernelkc} respectively.\\
+bridge kernel method (Bullard 1999, Horne et al. 2007), the biased
+random bridge kernel method (Benhamou and Cornelis 2010, Benhamou
+2011), and the product kernel algorithm (Keating and Cherry 2009) are
+implemented in the functions \texttt{kernelbb} and \texttt{kernelkc}
+respectively.\\
 
 But one thing is important: at many places in this vignette, we have
 noted that the descriptive parameters of the steps can be analysed as
@@ -1582,6 +1816,11 @@ underlying the analysis of animal space use.
 \item Bartumeus, F., da Luz, M.G.E., Viswanathan, G.M. and Catalan,
   J. 2005. Animal search strategies: a quantitative random-walk
   analysis. Ecology, 86: 3078--3087.
+\item Benhamou, S. and Cornelis, D. 2010. Incorporating movement
+  behavior and barriers to improve kernel home range space use
+  estimates. Journal of Wildlife Management, 74, 1353--1360.
+\item Benhamou, S. 2011. Dynamic approach to space and habitat use
+  based on biased random bridges. PLOS ONE, 6, 1--8.
 \item Benhamou, S. 2004. How to reliably estimate the tortuosity of an
   animal's path: straightness, sinuosity, or fractal dimension?
   Journal of Theoretical Biology, 229, 209--220.

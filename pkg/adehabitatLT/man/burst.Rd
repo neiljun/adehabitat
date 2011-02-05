@@ -5,6 +5,7 @@
 \alias{id<-}
 \alias{removeinfo}
 \alias{infolocs}
+\alias{infolocs<-}
 \title{ID, Bursts and infolocs of an Object of Class ltraj}
 \description{
   Functions to get or set the attribute \code{"id"}, \code{"burst"}, and
@@ -17,12 +18,16 @@ burst(ltraj) <- value
 id(ltraj)
 id(ltraj) <- value
 infolocs(ltraj, which)
+infolocs(ltraj) <- value
 removeinfo(ltraj)
 }
 \arguments{
   \item{ltraj}{an object of class \code{ltraj}}
-  \item{value}{a character vector of up to the same length as
-    \code{ltraj}}
+  \item{value}{for the assignment functions \code{burst} and \code{id},
+    a character vector of up to the same length as \code{ltraj}.  For
+    \code{infolocs} a list of data frames of the same length of
+    \code{ltraj} (with each component having the same number of rows as
+    the corresponding element in \code{ltraj}).}
   \item{which}{an optional character vector containing the names of the
     variables in the \code{infolocs} attribute to be returned}
 }

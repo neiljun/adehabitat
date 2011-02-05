@@ -17,7 +17,7 @@ the {\tt adehabitatHR} Package }
   Office national de la classe et de la faune
   sauvage\\
   Saint Benoist -- 78610 Auffargis -- France.}
-\date{Oct 2008}
+\date{Jan 2011}
 
 \begin{document}
 
@@ -121,6 +121,9 @@ estimation methods:\\
   \item The ``classical'' kernel method (Worton, 1989)
   \item the Brownian bridge kernel method (Bullard, 1999, Horne et
     al. 2007);
+  \item The Biased random bridge kernel method, also called
+    ``movement-based kernel estimation'' (Benhamou and Cornelis, 2010,
+    Benhamou, 2011);
   \item the product kernel algorithm (Keating and Cherry, 2009).
   \end{itemize}
 \item Several home-range estimation methods relying on the calculation
@@ -444,7 +447,7 @@ The result is shown below, in black, on an elevation map:
 
 <<label=fig5,echo=FALSE,fig=FALSE,eval=FALSE>>=
 image(puechabonsp$map)
-image(enc, add=TRUE, col="black")
+image(enc, add=TRUE, col="black", useRasterImage=FALSE)
 @
 
 <<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
@@ -474,7 +477,7 @@ column per animal:
 par(mar=c(0,0,0,0))
 par(mfrow=c(2,2))
 for (i in 1:4) {
-    image(cprast[,i])
+    image(cprast[,i], useRasterImage=FALSE)
     box()
 }
 @
@@ -1188,6 +1191,185 @@ the latter measures the area of the vector home range (with smoother
 contour).  However, note that the difference between the two estimates
 decrease as the resolution of the grid becomes finer.
 
+
+\subsection{Taking into account the presence of physical boundary over
+  the study area}
+
+In a recent paper, Benhamou and Cornelis (2010) proposed an
+interesting approach to take into account the presence of physical
+boundaries on the study area. They proposed to extend to 2 dimensions
+a method developed for one dimension by Silverman 1986. The principle
+of this approach is described below:
+
+<<label=figggf,echo=FALSE,fig=FALSE,eval=FALSE>>=
+par(mar=c(0,0,0,0))
+plot(c(0,1),asp=1, ty="n")
+bound <- structure(list(x = c(1.11651014886660, 1.31884344750132, 1.49071796999748,
+1.56686491034388, 1.65171435815844, 1.627782462621, 1.59079680588132,
+1.63648497008916), y = c(0.819277593991856, 0.797467606139553,
+0.740761637723568, 0.609901710609753, 0.417973817509493, 0.263122903758146,
+0.106090991221569, -0.00732094561040263)), .Names = c("x", "y"
+))
+pts <- structure(list(x = c(1.14479329813812, 1.20135959668116, 1.18395458174484,
+1.30143843256500, 1.29056029822980, 1.28620904449572, 1.31449219376724,
+1.46896170132708, 1.39063913411364, 1.50377173119972, 1.627782462621,
+1.57121616407796, 1.37758537291140, 1.21006210414932, 1.32537032810244,
+1.519001119269, 1.46678607446004, 1.32754595496948, 1.17960332801076,
+1.12303702946772, 1.19700834294708, 1.57121616407796, 1.57774304467908,
+1.30578968629908, 1.60167494021652, 1.62995808948804, 1.5625136566098,
+1.46896170132708, 1.43632729832148, 1.31449219376724), y = c(0.784381613428172,
+0.732037642582647, 0.605539713039293, 0.559738738549458, 0.67315067538143,
+0.749485632864488, 0.76257162557587, 0.714589652300805, 0.633892697247286,
+0.330733866100284, 0.417973817509493, 0.527023756771005, 0.548833744623307,
+0.378715839375349, 0.156253963281865, 0.287113890395679, 0.199873938986470,
+0.354724852737816, 0.39180183208673, 0.311104877033211, 0.20423593655693,
+0.106090991221569, 0.212959931697851, 0.780019615857712, 0.367810845449197,
+0.424516813865184, 0.518299761630084, 0.601177715468833, 0.712408653515574,
+0.703684658374653)), .Names = c("x", "y"))
+lines(bound)
+bound <- do.call("cbind",bound)
+Slo1 <- Line(bound)
+Sli1 <- Lines(list(Slo1), ID="frontier1")
+barrier <- SpatialLines(list(Sli1))
+
+points(pts, pch=16)
+pts <- as.data.frame(pts)
+coordinates(pts) <- c("x","y")
+ii <- adehabitatHR:::.boundaryk(pts, barrier, 0.04)
+points(ii, pch=3)
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<figggf>>
+<<zfig>>
+@
+\end{center}
+
+On this figure, the relocations are located near the lower left corner
+of the map. The line describes a physical boundary located on the
+study area (e.g. a cliff, a pond, etc.). The animal cannot cross the
+boundary. The use of the classical kernel estimation will not take
+into account this boundary when estimating the UD. A classical
+approach when such problem occur is to use the classical kernel
+approach and then to set to 0 the value of the UD on the other side of
+the boundary. However, this may lead to some bias in the estimation of
+the UD near the boundary (as the kernel estimation will ``smooth'' the
+use across the boundary, whereas one side of the boundary is used and
+the other unused).  Benhamou and Cornelis (2010) extended an approach
+developed for kernel estimation in one dimension: this approach
+consists in calculating the mirror image of the points located near
+the boundary, and adding these ``mirror points'' to the actual
+relocations before the kernel estimation (These mirror points
+correspond to the crosses on the figure). \textbf{Note that this
+  approach cannot be used for all boundaries}. There are two
+constraints that have to be satisfied:\\
+
+\begin{itemize}
+\item The boundary should be defined as the union of several segments,
+  \textit{and each segment length should at least be equal to $3\times
+    h$}, where $h$ is the smoothing parameter used for kernel
+  smoothing;\\
+
+\item The angle between two successive line segments should be greater
+  that $\pi/2$ or lower that $-\pi/2’$.
+\end{itemize}
+
+\noindent Therefore, the boundary shape should be fairly simple, and
+not too tortuous.\\
+
+Now, let us consider the case of the wild boar monitored in
+Puechabon. Consider the map of the elevation on the study area:
+
+<<label=mapelev,echo=FALSE,fig=FALSE,eval=FALSE>>=
+image(puechabonsp$map)
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<mapelev>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<mapelev>>
+<<zfig>>
+@
+\end{center}
+
+This area is traversed by the Herault gorges. As can be seen on this
+figure, the slopes of the gorges are very steep, and it is nearly
+impossible for the wild boars monitored to cross the river (although
+it is possible in other places). Therefore, the gorges are a boundary
+that cannot be crossed by the animal. Using the function
+\texttt{locator()}, we have defined the following boundary:
+
+
+<<label=figboundary,echo=FALSE,fig=FALSE,eval=FALSE>>=
+bound <- structure(list(x = c(701751.385381925, 701019.24105475,
+                        700739.303517889,
+                        700071.760160759, 699522.651915378,
+                        698887.40904327, 698510.570051342,
+                        698262.932999504, 697843.026694212,
+                        698058.363261028),
+                        y = c(3161824.03387414,
+                        3161824.03387414, 3161446.96718494,
+                        3161770.16720425, 3161479.28718687,
+                        3161231.50050539, 3161037.5804938,
+                        3160294.22044937, 3159389.26039528,
+                        3157482.3802813)), .Names = c("x", "y"))
+image(puechabonsp$map)
+lines(bound, lwd=3)
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<figboundary>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<figboundary>>
+<<zfig>>
+@
+\end{center}
+
+
+We now convert this boundary as a SpatialLines object:
+
+<<>>=
+## We convert bound to SpatialLines:
+bound <- do.call("cbind",bound)
+Slo1 <- Line(bound)
+Sli1 <- Lines(list(Slo1), ID="frontier1")
+barrier <- SpatialLines(list(Sli1))
+@
+
+We can now set the parameter \texttt{boundary} of the function
+\texttt{kernelUD}, which indicates that we want to use this approach:
+
+<<label=imagekudbound,echo=FALSE,fig=FALSE,eval=FALSE>>=
+kud <- kernelUD(puechabonsp$relocs[,1], h=100, grid=100, boundary=barrier)
+image(kud)
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<imagekudbound>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<imagekudbound>>
+<<zfigg>>
+@
+\end{center}
+
+The effect of the boundary correction is clear on the UD of Brock and
+Calou.
+
+
 \section{Taking into account the time dependence between relocation}
 
 \subsection{The Brownian bridge kernel method}
@@ -1508,6 +1690,284 @@ plot(getverticeshr(tata, 95), add=TRUE, lwd=2)
 \end{center}
 
 
+\subsection{The biased random bridge kernel method}
+
+\subsubsection{Description}
+
+Benhamou and Cornelis (2010) developed an approach similar to the
+Brownian bridge method for the analysis of trajectories. They called it ``movement
+based kernel estimation'' (MBKE). The principle of this method
+consists in dividing each step into several sub-steps, i.e. in adding
+new points at regular intervals on each step prior to a classical
+kernel estimation, that is:
+
+<<label=figexe1,echo=FALSE,fig=FALSE,eval=FALSE>>=
+par(mar=c(0,0,0,0))
+plot(c(0,1,2,3),c(0,1,0,1), pch=16, cex=4, xlim=c(-0.5, 3.5),
+ylim=c(-0.5, 1.5))
+segments(0,0,1,1)
+segments(2,0,3,1)
+points(seq(2,3,length=8), seq(0,1,length=8), pch=16, cex=2)
+arrows(1,0.5, 2, 0.5, lwd=5)
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<figexe1>>
+<<zfig>>
+@
+\end{center}
+
+Then a kernel estimation is carried out with the known (large points
+on the figure) and interpolated (small points) relocations, with a
+variable smoothing parameter (the smoothing parameter depends on the
+time spent between a known relocation and an interpolated relocation:
+it is minimum when the relocation is known and larger as the
+interpolated time between the known relocation and the
+interpolated location increases).\\
+
+In a later paper, Benhamou (2011) demonstrated that the movement-based
+kernel approach takes place in the framework of the
+biased random walk model. If we describe a trajectory as a succession
+of ``steps'', each being characterized by a speed and an angle with
+the east direction, the process generating the trajectory is a biased
+random walk when the probability density distribution of the angles is
+not an uniform distribution (i.e. there is a preferred direction of
+movement). The main quality of the biased random walk is that it does
+not suppose a purely diffusive movement (the brownian bridge method
+supposes only a diffusion), but takes into account an advection
+component in the trajectory (i.e. a ``drift'' between successive
+relocations). This model is therefore more realistic when animal
+movements are studied.\\
+
+Now, consider two successive relocations $\mathbf{r}_1 = (x_1, y_1)$
+and $\mathbf{r}_2 = (x_2, y_2)$, collected respectively at times $t_1$
+and $t_2$, and building a step of the trajectory.  Our aim is to
+estimate the function giving the probability density (pdf) that the
+animal was located at a given place $\mathbf{r}=(x,y)$ at time $t_i$ (with $t_1
+< t_i < t_2$), and \textit{given that the animal is moving according to a
+  biased random walk}. The movement generated by a biased random walk
+\textit{given} the start and end relocation is called a \textit{biased
+  random   bridge} (BRB). Benhamou (2011) noted that the BRB
+can be approximated by a bivariate normal distribution:
+
+\begin{equation}
+  \label{eq:brb}
+  f(\mathbf{r}, t_i | \mathbf{r}_1, \mathbf{r}_2) =
+  \frac{t_2-t_1}{4\pi D (t_2 - t_i)} \exp \left [ \frac{\mathbf{r}_m
+      \mathbf{D} \mathbf{r}_m}{4 p_i(t_2-t_i)} \right ]
+\end{equation}
+
+
+\noindent where the mean location corresponds to $\mathbf{r}_m = (x_1
++ p_i(x_2-x_1), y_1 + p_i(y_2-y_1))$, and $p_i =
+(t_i-t_1)/(t_2-t_1)$. The variance-covariance matrix $\mathbf{D}$ of
+this distribution usually cannot be estimated in practice (Benhamou,
+2011). Consequently, the biased random bridge is approximated by a
+random walk with a diffusion coefficient $D$ on which a drift
+$\mathbf{v}$ is appended. And, under this assumption, the required pdf
+can be approximated by a circular normal distribution fully
+independent of the drift, i.e. the matrix $\mathbf{D}$ in equation
+\ref{eq:brb} is supposed diagonal, with both diagonal elements
+corresponding to a \textit{diffusion coefficient} $D$. The figure
+below illustrates how the pdf of relocating the animal changes with
+the times $t_i$:
+
+<<label=figillustrbb,echo=FALSE,fig=FALSE,eval=FALSE>>=
+x1 <- c(0,0)
+x2 <- c(1,1)
+D <- 0.01
+tt <- 0.1
+foo <- function(x)
+{
+    m <- c(tt,tt)
+    xc <- x-m
+    (1/(4*pi*D*(1-tt)))*exp(-(sum(xc*xc/D))/(4*pi*tt*(1-tt)))
+}
+xy <- as.matrix(expand.grid(seq(-0.1, 1.1, length=100), seq(-0.1, 1.1, length=100)))
+den <- sapply(1:nrow(xy), function(i) foo(xy[i,]))
+df <- data.frame(x=xy[,1], y=xy[,2], den=den)
+coordinates(df) <- c("x","y")
+gridded(df) <- TRUE
+
+par(mfrow=c(1,2), mar=c(0.1,0.1,0.1,0.1))
+image(df)
+points(c(0,1), c(0,1), pch=16, cex=4)
+lines(c(0,1), c(0,1))
+points(tt,tt, pch=16)
+box()
+tt <- 0.5
+den <- sapply(1:nrow(xy), function(i) foo(xy[i,]))
+df <- data.frame(x=xy[,1], y=xy[,2], den=den)
+coordinates(df) <- c("x","y")
+gridded(df) <- TRUE
+image(df)
+points(c(0,1), c(0,1), pch=16, cex=4)
+lines(c(0,1), c(0,1))
+points(tt,tt, pch=16)
+box()
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<figillustrbb>>
+<<zfig>>
+@
+\end{center}
+
+We can see that the variance of this distribution is larger when the
+animal is far from the known relocations.\\
+
+Benhamou (2011) demonstrated that the MBKE can be used to estimate the
+UD of the animal under the hypothesis that the animal moves according
+to a biased random walk, with a drift allowed to change in strength
+and direction from one step to the next. However, it is supposed that
+the drift is constant during each step. For this reason, it is
+required to set an upper time threshold $T_{max}$. Steps characterized
+by a longer duration are not taken into account into the estimation of
+the UD. This upper threshold should be based on biological grounds.\\
+
+As for the Brownian bridge approach, this conditional pdf based on
+BRB takes an infinite value at times $t_i = t_1$ and
+$t_i = t_2$ (because, at these times, the relocation of the animal is
+known exactly). Benhamou (2011) proposed to circumvent this drawback
+by considering that the true relocation of the animal at times $t_1$ and
+$t_2$ is not known exactly. He noted: ``\textit{a GPS fix should be
+  considered a punctual sample of the possible locations at which the
+  animal may be observed at that time, given its current motivational
+  state and history. Even if the recording noise is low, the
+  relocation variance should therefore be large enough to encompass
+  potential locations occurring in the same habitat patch as the
+  recorded location}''. He proposed two ways to include this
+``relocation uncertainty'' component in the pdf: (i) either the
+relocation variance progressively merges with the movement
+component, (ii) or the relocation variance has a constant weight.\\
+
+In both cases, the minimum uncertainty over the relocation of an
+animal is observed for $t_i = t_1$ or $t_2$.  This minimum standard
+deviation corresponds to the parameter $h_{min}$. According to
+Benhamou and Cornelis (2010), ``\textit{$h_{min}$ must be at least
+  equal to the standard deviation of the localization errors and also
+  must integrate uncertainty of the habitat map when UDs are computed
+  for habitat preference analyses. Beyond these technical constraints,
+  $h_{min}$ also should incorporate a random component inherent to
+  animal behavior because any recorded location, even if accurately
+  recorded and plotted on a reliable map, is just a punctual sample of
+  possible locations at which the animal may be found at that time,
+  given its current motivational state and history. Consequently,
+  $h_{min}$ should be large enough to encompass potential locations
+  occurring in the same habitat patch as the recorded location}''.\\
+
+Therefore, the smoothing parameter used in the MKBE approach can be
+calculated with:
+
+$$
+h_i^2 = h_{min}^2 + 4 p_i(1-p_i)(h_{max}^2 - h_{min}^2)T_i/T_max
+$$
+
+\noindent where $h_{max}^2 = h_{min}^2 + D \times T_{max}/2$  if we
+suppose that the relocation variance has a constant weight or
+$h_{max}^2 = D \times T_{max}/2$ if we suppose that it progressively
+merges with the movement component.
+
+
+\subsubsection{Implementation}
+
+The BRB approach is implemented in the function \texttt{BRB} of {\tt
+  adehabitatHR}. We first load the dataset \texttt{buffalo} used by
+Benhamou (2011) to illustrate this approach:
+
+<<>>=
+data(buffalo)
+tr <- buffalo$traj
+tr
+@
+
+Note that this object has an infolocs component describing the
+proportion of time between relocation $i-1$ and relocation $i$ during
+which the animal was active. We show the trajectory of the animal below:
+
+<<label=trajbuff,echo=FALSE,fig=FALSE,eval=FALSE>>=
+plot(tr, spixdf=buffalo$habitat)
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<trajbuff>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<trajbuff>>
+<<zfig>>
+@
+\end{center}
+
+The first step of the analysis consists in the estimation of the
+diffusion coefficient $D$. We want to estimate one diffusion parameter
+for each habitat type. As Benhamou (2011), we set $T_{max} = 180$
+minutes and $L_{min} = 50$ metres (the smallest distance below which
+we consider that the animal is not moving). Because it is more
+sensible to consider the time of activity in the implementation of the
+method, we define the argument \texttt{activity} of the function as
+the name of the variable in the infolocs component storing this
+information:
+
+<<>>=
+vv <- BRB.D(tr, Tmax=180*60, Lmin=50, habitat=buffalo$habitat, activity="act")
+vv
+@
+
+The function \texttt{BRB.D} implements the estimation of the diffusion
+coefficient described in Benhamou (2011). Note that a maximum
+likelihood approach, similar to the approach used by Horne et
+al. (2007) is also available in the function \texttt{BRB.likD}.
+The values of the diffusion parameters are given in $m^2.s^{-1}$. Note
+that the number of steps in habitat 2 was to small to allow the
+calculation of a diffusion parameter for this habitat type. We can
+then use the function \texttt{BRB} to estimate the UD from these
+relocations. The parameter \texttt{tau} controls the time lag between
+interpolated relocations. Similarly to Benhamou (2011), we set $\tau =
+5$ min, and $h_{min} = 100$ metres:
+
+<<>>=
+ud <- BRB(tr, D = vv, Tmax = 180*60, tau = 300, Lmin = 50, hmin=100,
+          habitat = buffalo$habitat, activity = "act", grid = 100, b=0,
+          same4all=FALSE, extent=0.01)
+ud
+@
+
+The missing dispersion parameter for habitat 2 was replaced
+in the estimation by the global dispersion parameter.
+As for all kernel methods, this function returns an object of class
+\texttt{estUD} or \texttt{estUDm}, depending on the number of animals
+in the object of class \texttt{ltraj} passed as argument. We show the
+resulting UD:
+
+<<label=imagebrb,echo=FALSE,fig=FALSE,eval=FALSE>>=
+image(ud)
+@
+
+<<results=tex,echo=TRUE,fig=FALSE,eval=FALSE>>=
+<<imagebrb>>
+@
+
+\begin{center}
+<<results=tex,echo=FALSE>>=
+<<afig>>
+<<imagebrb>>
+<<zfig>>
+@
+\end{center}
+
+Note that it
+is also possible to specify a physical boundary that cannot be crossed
+by the animals in this function.
+
+
+
 \subsection{The product kernel algorithm}
 
 \subsubsection{Description}
@@ -1569,7 +2029,7 @@ bear
 @
 
 The data are stored as an object of class \texttt{ltraj} (see section
-\ref{sec:ltrajj}). Let use compute the UD of this bear for the date
+\ref{sec:ltrajj}). Let us compute the UD of this bear for the date
 2004-05-01. After a visual exploration, we noted that a smoothing
 parameter of 1000 meters for X and Y coordinates, and of 72 hours
 for the time returned interesting results. We can compute the UD with:
@@ -2109,6 +2569,11 @@ particular field of habitat selection study.
   Brownian bridge approach. Johns Hopkins University. Master thesis.
 \item Burt, W.H. 1943. Territoriality and home range concepts as
   applied to mammals. Journal of Mammalogy, 24, 346-352.
+\item Benhamou, S. and Cornelis, D. 2010. Incorporating movement
+  behavior and barriers to improve kernel home range space use
+  estimates. Journal of Wildlife Management, 74, 1353--1360.
+\item Benhamou, S. 2011. Dynamic approach to space and habitat use
+  based on biased random bridges. PLOS ONE, 6, 1--8.
 \item Calenge, C. 2005. Des outils statistiques pour l'analyse des
   semis de points dans l'espace ecologique. Universite Claude Bernard
   Lyon 1.

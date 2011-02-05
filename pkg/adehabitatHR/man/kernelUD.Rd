@@ -17,6 +17,9 @@
   \code{image} allows a graphical display of the estimates. \cr
   \code{getvolumeUD} and \code{kernel.area} provide utilities
   for home range and home-range size estimation.\cr
+  \code{getverticeshr} stores the home range contour as an object of
+  class \code{SpatialPolygonsDataFrame} (package sp), with one row per
+  animal.\cr
   \code{estUDm2spixdf} can be used to convert the result into an object
   of class \code{SpatialPixelsDataFrame}\cr
   \code{as.data.frame.estUD} can be used to convert an object of class
@@ -26,7 +29,8 @@
 
 kernelUD(xy, h = "href", grid = 60,
          same4all = FALSE, hlim = c(0.1, 1.5),
-         kern = c("bivnorm", "epa"), extent = 0.5)
+         kern = c("bivnorm", "epa"), extent = 0.5,
+         boundary = NULL)
 
 \method{print}{estUDm}(x, \dots)
 
@@ -81,13 +85,18 @@ estUDm2spixdf(x)
   \item{same4all}{logical. If \code{TRUE}, the same grid
     is used for all animals.  If \code{FALSE}, one grid per
     animal is used}
+  \item{boundary}{If, not \code{NULL}, an object inheriting the class
+    \code{SpatialLines} defining a barrier that cannot be crossed by the
+    animals.  There are constraints on the shape of the barrier that
+    depend on the smoothing parameter \code{h} (***see details***)}
   \item{x}{an object of class \code{estUD} (UD for one animal) or
     \code{estUDm} (UD for several animals).  For the 
     function \code{estUDm2spixdf}, an object of class \code{estUDm}
     only.  For the function \code{as.data.frame.estUD}, an object of
     class \code{estUD} only.}
-  \item{percent}{a vector of percentage levels
-    for home-range size estimation. }
+  \item{percent}{for \code{kernel.area}, a vector of percentage levels
+    for home-range size estimation.  For \code{getverticeshr}, a single
+    value giving the percentage level for home-range estimation.}
   \item{standardize}{a logical value indicating whether the UD should be
     standardized over the area of interest, so that the volume under the
     UD and *over the area* is equal to 1.}
@@ -145,10 +154,20 @@ estUDm2spixdf(x)
   \code{kernel.area}, to compute the home-range size.  Note, that the
   function \code{plot.hrsize} (see the help page of this  function) can
   be used to display the home-range size estimated at various levels.\cr
-  
-  Any home range contour can be extracted using the function
-  \code{getverticeshr} (see the help page of this function and the
-  example section).
+
+  The parameter \code{boundary} allows to define a barrier that cannot
+  be crossed by the animals.  When this parameter is
+  set, the method described by Benhamou and Cornelis (2010) for
+  correcting boundary biases is used.  The boundary can possibly be
+  defined by several nonconnected lines, each one being built by several
+  connected segments. Note that there are constraints on these segments
+  (not all kinds of boundary can be defined): (i) each segment length
+  should at least be equal to \code{3*h} (the size of "internal lane"
+  according to the terminology of Benhamou and Cornelis), (ii) the angle
+  between two line segments should be greater that \code{pi/2} or lower
+  that \code{-pi/2}.  The UD of all the pixels located within a
+  band defined by the boundary and with a width equal to \code{6*h}
+  ("external lane") is set to zero.
 }
 \value{
   
@@ -166,6 +185,9 @@ estUDm2spixdf(x)
   \code{kernel.area} returns a data frame of subclass \code{hrsize},
   with one column per animal and one row per level of
   estimation of the home range.\cr
+
+  \code{getverticeshr} returns an object of class
+  \code{SpatialPolygonsDataFrame}.\cr
 
   \code{estUDm2spixdf} returns an object of class
   \code{SpatialPixelsDataFrame}.
@@ -190,7 +212,8 @@ estUDm2spixdf(x)
 
   Benhamou, S. and Cornelis, D. (2010) Incorporating Movement Behavior
   and Barriers to Improve Biological Relevance of Kernel Home Range
-  Space Use Estimates. \emph{Journal of Animal Ecology}, in press.
+  Space Use Estimates. \emph{Journal of Wildlife Management}, \bold{74},
+  1353--1360.
 
 }
 \author{ Clement Calenge \email{clement.calenge@oncfs.gouv.fr} }
@@ -255,8 +278,63 @@ udbis <- kernelUD(loc[,1], grid = elev)
 image(udbis)
 
 
+##########################################
+##
+## Estimating the UD with the presence of a barrier
+## The boars are located on the plateau of Puechabon (near
+## Montpellier, France), and their movements are limited by the
+## Herault river.
+
+## We first map the elevation:
+image(elev)
+
+## Then, we used the function locator() to identify the limits of the
+## segments of this barrier. BEWARE! The boundary should satisfy the two
+## constraints: (i) segment length > 3*h, (ii) no angle lower than pi/2
+## between successive segments. We choose a smoothing parameter of 100
+## m, so that no segment length should be less than 300 m.
+## Because the resolution of the map is 100 m, this means that no
+## segment should cover less than 3 pixels. We have used the function
+## locator() to digitize this barrier and then the function dput to
+## have the following limits:
+
+bound <- structure(list(x = c(701751.385381925, 701019.24105475,
+                        700739.303517889,
+                        700071.760160759, 699522.651915378,
+                        698887.40904327, 698510.570051342,
+                        698262.932999504, 697843.026694212,
+                        698058.363261028),
+                        y = c(3161824.03387414,
+                        3161824.03387414, 3161446.96718494,
+                        3161770.16720425, 3161479.28718687,
+                        3161231.50050539, 3161037.5804938,
+                        3160294.22044937, 3159389.26039528,
+                        3157482.3802813)), .Names = c("x", "y"))
+
+lines(bound, lwd=3)
+
+## We convert bound to SpatialLines:
+bound <- do.call("cbind",bound)
+Slo1 <- Line(bound)
+Sli1 <- Lines(list(Slo1), ID="frontier1")
+barrier <- SpatialLines(list(Sli1))
+
+## estimation of the UD
+kud <- kernelUD(loc[,1], h=100, grid=100, boundary=barrier)
+
+## Result:
+image(kud)
+
+## Have a closer look to Calou:
+kud2 <- kud[[2]]
+image(kud2, col=grey(seq(1,0,length=15)))
+title(main="Home range of Calou")
+points(loc[slot(loc,"data")[,1]=="Calou",], pch=3, col="blue")
+plot(getverticeshr(kud2, 95), add=TRUE, lwd=2)
+lines(barrier, col="red", lwd=3)
 
 
 
 }
 \keyword{spatial}
+

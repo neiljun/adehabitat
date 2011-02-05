@@ -41,9 +41,10 @@ cutltraj <- function(ltraj, criterion, value.NA = FALSE,
         if (is.null(infol)) {
             res[[i]] <- as.ltraj(id=id, xy=x[,c("x","y")],
                                  date=x$date, burst=bu,
-                                 typeII=attr(ltraj,"typeII"))
+                                 typeII=attr(ltraj,"typeII"),
+                                 infolocs=infol)
         } else {
-            inf <- x[,(names(x)%in%names(infol[[i]]))]
+            inf <- x[,(names(x)%in%names(infol[[i]])), drop=FALSE]
             res[[i]] <- as.ltraj(id=id, xy=x[,c("x","y")],
                                  date=x$date, burst=bu,
                                  typeII=attr(ltraj,"typeII"),

@@ -20,7 +20,8 @@
 }
 \usage{
 as.ltraj(xy, date, id, burst = id, typeII = TRUE,
-         slsp = c("remove", "missing"), infolocs = NULL)
+         slsp = c("remove", "missing"),
+         infolocs = data.frame(pkey = paste(id, date, sep=".")))
 \method{print}{ltraj}(x, \dots)
 \method{summary}{ltraj}(object, \dots)
 rec(x, slsp = c("remove", "missing"))
@@ -43,8 +44,9 @@ rec(x, slsp = c("remove", "missing"))
     the snow)}
   \item{slsp}{a character string used for the computation of the
     turning angles (see details)}
-  \item{infolocs}{an optional data frame containing additionnal
-    information on the relocations (e.g., precision).}
+  \item{infolocs}{if not \code{NULL}, a data frame containing
+    additionnal information on the relocations (e.g., precision).  By
+    default, a primary key is generated.}
   \item{\dots}{For other functions, arguments to be passed to the generic
     functions \code{summary} and \code{print}}
 }

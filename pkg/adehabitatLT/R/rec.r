@@ -7,6 +7,21 @@ rec <- function(x, slsp=c("remove","missing"))
     if (!inherits(x, "ltraj"))
         stop("x should be of class \"ltraj\"")
 
+    lif <- infolocs(x)
+    if (!is.null(lif)) {
+        for (i in 1:length(x)) {
+            if (!all(row.names(x[[i]])%in%row.names(lif[[i]]))) {
+                x[[i]] <- x[[i]][row.names(x[[i]])%in%row.names(lif[[i]]),]
+                attr(x[[i]],"infolocs") <- lif[[i]]
+            }
+            if (!all(row.names(lif[[i]])%in%row.names(x[[i]]))) {
+                lif[[i]] <- lif[[i]][row.names(lif[[i]])%in%row.names(x[[i]]),]
+                attr(x[[i]],"infolocs") <- lif[[i]]
+            }
+        }
+
+    }
+
     ## Recomputation
     slsp <- match.arg(slsp)
     if (attr(x,"typeII")) {

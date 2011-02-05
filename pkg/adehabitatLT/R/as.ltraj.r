@@ -1,5 +1,6 @@
 as.ltraj <- function(xy, date=NULL, id, burst=id, typeII = TRUE,
-                     slsp =  c("remove", "missing"), infolocs=NULL)
+                     slsp =  c("remove", "missing"),
+                     infolocs = data.frame(pkey = paste(id, date, sep=".")))
 {
     ## Various verifications
     if (typeII) {
@@ -50,8 +51,8 @@ as.ltraj <- function(xy, date=NULL, id, burst=id, typeII = TRUE,
     ## sort the dates
     if (!is.null(infolocs))
         linfol <- lapply(1:length(linfol),
-                         function(j) linfol[[j]][order(res[[j]]$date),])
-    res <- lapply(res, function(y) y[order(y$date),])
+                         function(j) linfol[[j]][order(res[[j]]$date),,drop=FALSE])
+    res <- lapply(res, function(y) y[order(y$date),,drop=FALSE])
 
     ## Unique dates?
     rr <- any(unlist(lapply(res,
@@ -118,7 +119,9 @@ as.ltraj <- function(xy, date=NULL, id, burst=id, typeII = TRUE,
     if (!is.null(infolocs)) {
         res <- lapply(1:length(res), function(i) {
             x <- res[[i]]
-            attr(x, "infolocs") <- linfol[[i]]
+            y <- linfol[[i]]
+            row.names(y) <- row.names(x)
+            attr(x, "infolocs") <- y
             return(x)
         })
     }
@@ -142,7 +145,7 @@ as.ltraj <- function(xy, date=NULL, id, burst=id, typeII = TRUE,
     traj <- .traj2df(traj)
     na <- c("x","y","date","id","burst","dist","dt","rel.angle",
             "abs.angle","dx","dy", "R2n")
-    infolocs <- traj[,!(names(traj)%in%na)]
+    infolocs <- traj[,!(names(traj)%in%na), drop=FALSE]
     if (ncol(infolocs)>0) {
         res <- as.ltraj(xy=traj[,c("x","y")], date=traj$date, id=traj$id,
                         burst=traj$burst, typeII=TRUE, slsp,
@@ -293,7 +296,7 @@ infolocs <- function(ltraj, which)
             which <- names(attr(ltraj[[1]],"infolocs"))
         re <- lapply(ltraj, function(y) {
             res <- attr(y, "infolocs")
-            return(res[,names(res)%in%which])
+            return(res[,names(res)%in%which, drop=FALSE])
         })
         return(re)
     } else {

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <R.h>
 #include <Rmath.h>
+#include <Rinternals.h>
 
 
 /* ***********************************************************************
@@ -2635,6 +2636,426 @@ void findmaxgrid(double *grille, int *nlig, int *ncol)
 
 
 
+/* ***********************************************************************
+ *                                                                       *
+ *                          BRB                                          *
+ *                                                                       *
+ * ********************************************************************* */
+
+
+
+int HBT(double xt, double yt, SEXP hab, SEXP nrow, SEXP cs, double xll2, 
+	double yll2)
+{
+    int hh, nl, nc;
+    nl = (int) ftrunc(((xt - xll2)/REAL(cs)[0]) + REAL(cs)[0]*0.000001); 
+    nc = (int) ftrunc(((yt - yll2)/REAL(cs)[0]) + REAL(cs)[0]*0.000001);
+    hh = INTEGER(hab)[ nl + (nc * (INTEGER(nrow)[0])) ];
+    return(hh);
+}
+
+
+int HBTl(SEXP xl, SEXP yl, SEXP PAtmp, SEXP hab, SEXP nrow, SEXP cs, double xll2, 
+	double yll2, int k, int i)
+{
+    double t1, xt, yt;
+    int n, j, hh, th;
+    SEXP habp;
+    
+    PROTECT(habp = allocVector(INTSXP, k+1));
+    
+
+    t1 = REAL(PAtmp)[i+1] - REAL(PAtmp)[i];
+    n = (int) round(t1);
+    if (n <1)
+	n = 1;
+    for (j = 0; j < k+1; j++) {
+	INTEGER(habp)[j] = 0;
+    }
+    
+    /* identify the habitat at each step */
+    for (j = 0; j <= n; j++) {
+	xt = REAL(xl)[i] + (((double) j)/((double) n)) * (REAL(xl)[i+1] - REAL(xl)[i]);
+	yt = REAL(yl)[i] + (((double) j)/((double) n)) * (REAL(yl)[i+1] - REAL(yl)[i]);
+	hh = HBT(xt, yt, hab, nrow, cs, xll2, yll2);
+	if (hh != NA_INTEGER) {
+	    INTEGER(habp)[hh]++;
+	} else {
+	    INTEGER(habp)[k]++;
+	}
+    }
+    hh=0;
+    for (j = 0; j < k+1; j ++) {
+	if (INTEGER(habp)[j] == (n+1)) {
+	    th = j;
+	    hh++;
+	}
+    }
+    
+    if (hh > 0) {
+	UNPROTECT(1);
+	return(th);
+    } else {
+	UNPROTECT(1);
+	return(NA_INTEGER);
+    }
+}
+
+
+/* df contient x,y,date en posix */
+SEXP fillsegments(SEXP df, SEXP Tmaxr, SEXP taur, SEXP hminr, SEXP D, SEXP Lminr, 
+		  SEXP b, SEXP hab, SEXP xll, SEXP yll, SEXP cs, SEXP nrowc, SEXP PA)
+{
+    int nrow, nnr, ni, i, m, k, nh, h, lp;
+    double dt, dta, Tmax, tau, h2min, Lmin, dist, hmin, xll2, yll2, hm;
+    SEXP x, y, date, resux, resuy, resuh, dfso, hmax, h2max, PAtmp, PA2;
+    
+    /* Le nombre de lignes de ce data.frame */
+    nrow = length(VECTOR_ELT(df,0));
+    nnr = 0;
+    nh = length(D);
+    if (nh > 1) {
+	xll2 = REAL(xll)[0] - REAL(cs)[0]/2.0;
+	yll2 = REAL(yll)[0] - REAL(cs)[0]/2.0;
+    }
+    
+    Tmax = REAL(Tmaxr)[0];
+    hmin = REAL(hminr)[0];
+    h2min = R_pow(hmin, 2.0);
+    
+    PROTECT(hmax = allocVector(REALSXP, nh+1));
+    PROTECT(h2max = allocVector(REALSXP, nh+1));
+
+    REAL(hmax)[0] = sqrt(((1.0 - REAL(b)[0]) * h2min) + (REAL(D)[0] * Tmax / 2.0));
+    hm = REAL(hmax)[0];
+    if (nh > 1) {
+	for (i = 1; i < nh; i++) {
+	    REAL(hmax)[i] = sqrt(((1.0 - REAL(b)[0]) * h2min) + (REAL(D)[i] * Tmax / 2.0));
+	    if (hm < REAL(hmax)[i])
+		hm = REAL(hmax)[i];
+	}
+	REAL(hmax)[nh] = hm;
+    }
+    Lmin = REAL(Lminr)[0];
+    tau = REAL(taur)[0];
+    REAL(h2max)[0] = R_pow(REAL(hmax)[0], 2.0);
+    if (nh > 1) {
+	for (i = 1; i <= nh; i++) {
+	    REAL(h2max)[i] = R_pow(REAL(hmax)[i], 2.0);
+	}
+    }
+
+    /* Get the coordinates and date */
+    PROTECT(x = coerceVector(VECTOR_ELT(df,0), REALSXP));
+    PROTECT(y = coerceVector(VECTOR_ELT(df,1), REALSXP));
+    PROTECT(date = coerceVector(VECTOR_ELT(df,2), REALSXP));
+    lp = length(PA);
+    PROTECT(PAtmp = allocVector(REALSXP, nrow));
+    PROTECT(PA2 = coerceVector(PA, REALSXP));
+    if (lp > 1) {
+	REAL(PAtmp)[0] = 0.0;
+	for (i = 1; i < nrow; i++) {
+	    REAL(PAtmp)[i] = REAL(PAtmp)[i-1] + (REAL(PA2)[i-1] * (REAL(date)[i] - REAL(date)[i-1]));
+	}	
+    } else {
+	for (i = 0; i < nrow; i++) {
+	    REAL(PAtmp)[i] = REAL(date)[i];
+	}
+    }
+    
+    
+    /* for each segment, calculates the number of points to add */
+    for (i = 0; i < (nrow-1); i++) {
+	dt = REAL(date)[i+1] - REAL(date)[i];
+	dta = REAL(PAtmp)[i+1] - REAL(PAtmp)[i];
+	dist = pythag(REAL(x)[i+1] - REAL(x)[i], REAL(y)[i+1] - REAL(y)[i]);
+	if ((dt < Tmax)&&(dist > Lmin)) {
+	    nnr = nnr + (int) round(dta/tau);
+	}
+    }
+    nnr++;
+    
+    /* prepares the vector of output */
+    PROTECT(resux = allocVector(REALSXP, nnr));
+    PROTECT(resuy = allocVector(REALSXP, nnr));
+    PROTECT(resuh = allocVector(REALSXP, nnr));
+    
+    /* and finds the coordinates of the points */
+    k=0;
+    for (i = 0; i < (nrow-1); i++) {
+
+	dt = REAL(date)[i+1] - REAL(date)[i];
+	dta = REAL(PAtmp)[i+1] - REAL(PAtmp)[i];
+	dist = pythag(REAL(x)[i+1] - REAL(x)[i], REAL(y)[i+1] - REAL(y)[i]);
+
+	if ((dt < Tmax)&&(dist>Lmin)&&(dta>0.0000001)) {
+	    ni = (int) round(dta/tau);
+	    for (m = 0; m < ni; m++) {
+		REAL(resux)[k] = REAL(x)[i]+ 
+			((double) m) * (REAL(x)[i+1] - REAL(x)[i])/((double) ni);
+		REAL(resuy)[k] = REAL(y)[i]+ 
+		    ((double) m) * (REAL(y)[i+1] - REAL(y)[i])/((double) ni);
+		if (nh < 2) {
+		    REAL(resuh)[k] = sqrt(h2min + 4.0*(((double) m)/((double) ni))*
+					  (1 - ((double) m)/((double) ni))*(REAL(h2max)[0] - h2min)*dta/Tmax);
+		} else {
+		    h = HBT(REAL(resux)[k], REAL(resuy)[k], hab, nrowc, cs, xll2, 
+			    yll2);
+		    if (h == NA_INTEGER) {
+			REAL(resuh)[k] = sqrt(h2min + 4.0*(((double) m)/((double) ni))*
+					      (1 - ((double) m)/((double) ni))*
+					      (REAL(h2max)[nh] - h2min)*dta/Tmax);
+			
+		    } else {
+			REAL(resuh)[k] = sqrt(h2min + 4.0*(((double) m)/((double) ni))*
+					      (1 - ((double) m)/((double) ni))*
+					      (REAL(h2max)[h] - h2min)*dta/Tmax);
+			
+		    }
+		}
+		k++;
+	    }
+	}
+    }
+    
+    REAL(resux)[k] = REAL(x)[nrow-1];
+    REAL(resuy)[k] = REAL(y)[nrow-1];
+    REAL(resuh)[k] = sqrt(h2min);
+    
+    PROTECT(dfso = allocVector(VECSXP, 3));
+    SET_VECTOR_ELT(dfso, 0, resux);
+    SET_VECTOR_ELT(dfso, 1, resuy);
+    SET_VECTOR_ELT(dfso, 2, resuh);
+
+    UNPROTECT(11);
+
+    return(dfso);
+}
+
+
+/* On calcule maintenant, sur la base d'une grille passée, l'estimation kernel */
+SEXP mkde(SEXP xyh, SEXP grid)
+{
+    
+    int n, nl, i, j;
+    SEXP x, y, h, dens, xg, yg, gridso;
+    double xmin, ymin, xmax, ymax, hmax, dist;
+    
+    /* on ajuste alors le noyau */
+    n = length(VECTOR_ELT(grid,0));
+    nl = length(VECTOR_ELT(xyh,0));
+
+
+    PROTECT(x = coerceVector(VECTOR_ELT(xyh,0), REALSXP));
+    PROTECT(y = coerceVector(VECTOR_ELT(xyh,1), REALSXP));
+    PROTECT(h = coerceVector(VECTOR_ELT(xyh,2), REALSXP));
+    PROTECT(xg = coerceVector(VECTOR_ELT(grid,0), REALSXP));
+    PROTECT(yg = coerceVector(VECTOR_ELT(grid,1), REALSXP));
+    PROTECT(dens = allocVector(REALSXP, n));
+    
+    
+    xmin = REAL(x)[0];
+    ymin = REAL(y)[0];
+    xmax = REAL(x)[0];
+    ymax = REAL(y)[0];
+    hmax = REAL(h)[0];
+    for (j = 1; j < nl; j++) {
+	if (REAL(x)[j] < xmin)
+	    xmin = REAL(x)[j];
+	if (REAL(x)[j] > xmax)
+	    xmax = REAL(x)[j];
+	if (REAL(y)[j] < ymin)
+	    ymin = REAL(y)[j];
+	if (REAL(y)[j] > ymax)
+	    ymax = REAL(y)[j];
+	if (REAL(h)[j] > hmax)
+	    hmax = REAL(h)[j];
+    }
+    hmax = hmax * 3.0;
+    
+    for (i = 0; i < n; i++) {
+	R_CheckUserInterrupt();
+	REAL(dens)[i] = 0.0;
+	if ((xmin - REAL(xg)[i] < hmax)&&
+	    (ymin - REAL(yg)[i] < hmax)&&
+	    (REAL(xg)[i] - xmax < hmax)&&
+	    (REAL(yg)[i] - ymax < hmax)) {
+
+	    for (j = 0; j < nl; j++) {
+		dist= pythag(REAL(x)[j] -REAL(xg)[i], REAL(y)[j] -REAL(yg)[i]);
+		if (dist < 3.0*REAL(h)[j]) {
+		    REAL(dens)[i] = REAL(dens)[i] + exp(-(R_pow(dist,2.0))/
+							(2.0 * R_pow(REAL(h)[j], 2.0))) / 
+			R_pow(REAL(h)[j], 2.0);
+		}
+	    }
+	    REAL(dens)[i] = (1.0/(2.0 * M_PI * ((double) nl)))*(REAL(dens)[i]);
+	}
+    }
+
+    PROTECT(gridso = allocVector(VECSXP, 3));
+    SET_VECTOR_ELT(gridso, 0, xg);
+    SET_VECTOR_ELT(gridso, 1, yg);
+    SET_VECTOR_ELT(gridso, 2, dens);
+
+    UNPROTECT(7);
+    return(gridso);
+}
+
+
+
+
+/* bis */
+SEXP mkdeb(SEXP xyh, SEXP xll, SEXP yll, SEXP cs, SEXP nrow, SEXP ncol)
+{
+    
+    int nl, nr, nc, nro, nco, i, j, l, c, hmaxdis;
+    SEXP x, y, h, dens, xg, yg, gridso;
+    double xlo, ylo, hmax, dist, xll2, yll2;
+    
+    /* on ajuste alors le noyau */
+    nl = length(VECTOR_ELT(xyh,0));
+
+
+    PROTECT(x = coerceVector(VECTOR_ELT(xyh,0), REALSXP));
+    PROTECT(y = coerceVector(VECTOR_ELT(xyh,1), REALSXP));
+    PROTECT(h = coerceVector(VECTOR_ELT(xyh,2), REALSXP));
+    PROTECT(xg = allocVector(REALSXP, INTEGER(nrow)[0]*INTEGER(ncol)[0]));
+    PROTECT(yg = allocVector(REALSXP, INTEGER(nrow)[0]*INTEGER(ncol)[0]));
+    PROTECT(dens = allocVector(REALSXP, INTEGER(nrow)[0]*INTEGER(ncol)[0]));
+    nro = INTEGER(nrow)[0];
+    nco = INTEGER(ncol)[0];
+
+    for (j = 0; j < nco; j++) {
+	for (i = 0; i < nro; i++) {
+	    REAL(xg)[ i + (j * (INTEGER(nrow)[0])) ] = REAL(xll)[0] + ((double) i)*REAL(cs)[0];
+	    REAL(yg)[ i + (j * (INTEGER(nrow)[0])) ] = REAL(yll)[0] + ((double) j)*REAL(cs)[0];
+	}
+    }
+	    
+    for (i = 0; i < INTEGER(nrow)[0]*INTEGER(ncol)[0]; i++) {
+	REAL(dens)[i] = 0.0;
+    }
+    
+    hmax = REAL(h)[0];
+    for (j = 1; j < nl; j++) {
+	if (REAL(h)[j] > hmax)
+	    hmax = REAL(h)[j];
+    }
+    hmax = hmax * 3.0;
+    xll2 = REAL(xll)[0] - REAL(cs)[0]/2.0;
+    yll2 = REAL(yll)[0] - REAL(cs)[0]/2.0;
+    hmaxdis = (int) round(hmax / REAL(cs)[0]);
+    
+    for (j = 0; j < nl; j++) {
+	R_CheckUserInterrupt();
+	xlo = REAL(x)[j];
+	ylo = REAL(y)[j];
+	nr = (int) ftrunc(((xlo - xll2)/REAL(cs)[0]) + REAL(cs)[0]*0.000001); 
+	nc = (int) ftrunc(((ylo - yll2)/REAL(cs)[0]) + REAL(cs)[0]*0.000001);
+	for (l = (nr-hmaxdis-1); l <(nr+hmaxdis+1); l++) {
+	    for (c = (nc-hmaxdis-1); c <(nc+hmaxdis+1); c++) {
+		if ((l<nro)&&(l>0)) {
+		    if ((c<nco)&&(c>0)) {
+			dist= pythag(xlo -REAL(xg)[l + (c * (INTEGER(nrow)[0]))], 
+				     ylo -REAL(yg)[l + (c * (INTEGER(nrow)[0]))]);
+			REAL(dens)[ l + (c * (INTEGER(nrow)[0])) ] =
+			    REAL(dens)[ l + (c * (INTEGER(nrow)[0])) ] +
+			    exp(-(R_pow(dist,2.0))/
+				(2.0 * R_pow(REAL(h)[j], 2.0))) / 
+			    R_pow(REAL(h)[j], 2.0)/(2.0 * M_PI * ((double) nl));
+		    }
+		}
+	    }
+	}
+    }
+	
+
+    PROTECT(gridso = allocVector(VECSXP, 3));
+    SET_VECTOR_ELT(gridso, 0, xg);
+    SET_VECTOR_ELT(gridso, 1, yg);
+    SET_VECTOR_ELT(gridso, 2, dens);
+
+    UNPROTECT(7);
+    return(gridso);
+}
+
+
+
+/* */
+SEXP CalculD(SEXP tra, SEXP Tmaxr, SEXP Lmin, SEXP PA)
+{
+    double Tmax, t1, t2, xt, yt, delta2, D, l1, l2;
+    int n, i, Nc, lp;
+    SEXP x, y, date, Ds, PA2, PAtmp;
+    
+    Tmax = REAL(Tmaxr)[0];
+    n = length(VECTOR_ELT(tra,0));
+    xt = 0.0;
+    yt = 0.0;
+
+    /* Get the coordinates and date */
+    PROTECT(x = coerceVector(VECTOR_ELT(tra,0), REALSXP));
+    PROTECT(y = coerceVector(VECTOR_ELT(tra,1), REALSXP));
+    PROTECT(date = coerceVector(VECTOR_ELT(tra,2), REALSXP));
+    lp = length(PA);
+    PROTECT(PAtmp = allocVector(REALSXP, n));
+    PROTECT(PA2 = coerceVector(PA, REALSXP));
+    if (lp > 1) {
+	REAL(PAtmp)[0] = 0.0;
+	for (i = 1; i < n; i++) {
+	    REAL(PAtmp)[i] = REAL(PAtmp)[i-1] + (REAL(PA2)[i-1] * 
+						 (REAL(date)[i] - REAL(date)[i-1]));
+	}	
+    } else {
+	for (i = 0; i < n; i++) {
+	    REAL(PAtmp)[i] = REAL(date)[i];
+	}
+    }
+
+
+    D = 0.0;
+    Nc = 0;
+    for (i = 0; i < (n-2); i++) {	
+	t1 = REAL(PAtmp)[i+1] - REAL(PAtmp)[i];
+	t2 = REAL(PAtmp)[i+2] - REAL(PAtmp)[i+1];
+	l1 = pythag(REAL(x)[i+1] - REAL(x)[i], 
+		    REAL(y)[i+1] - REAL(y)[i]);
+	l2 = pythag(REAL(x)[i+2] - REAL(x)[i+1],
+		    REAL(y)[i+2] - REAL(y)[i+1]);
+	if ((REAL(date)[i+2]-REAL(date)[i]) < Tmax) {
+	    if (t1 > 0.0000000001) {
+		if (t2 > 0.0000000001) {
+		    if (t1 < 2.0 * t2) {
+			if (t1 > t2/2.0) {
+			    if (l1 <  2.0 * l2) {
+				if (l1 >  l2/2.0) {
+				    if (l1 > REAL(Lmin)[0]) {
+					if (l2 > REAL(Lmin)[0]) {
+					    xt = REAL(x)[i] + (REAL(x)[i+2] - REAL(x)[i])*(t1/(t1+t2));
+					    yt = REAL(y)[i] + (REAL(y)[i+2] - REAL(y)[i])*(t1/(t1+t2));
+					    delta2 = R_pow((xt - REAL(x)[i+1]), 2.0) + 
+						R_pow((yt - REAL(y)[i+1]), 2.0);
+					    D = D + (delta2*((1.0/t1) + (1.0/t2)));
+					    Nc++;
+					}
+				    }
+				}
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+    D = D/(4.0 * ((double) Nc));
+    PROTECT(Ds = allocVector(REALSXP, 2));
+    REAL(Ds)[0] = (double) Nc;
+    REAL(Ds)[1] = D;
+    UNPROTECT(6);
+
+    return(Ds);    
+}
 
 
 
@@ -2642,3 +3063,212 @@ void findmaxgrid(double *grille, int *nlig, int *ncol)
 
 
 
+
+/* Differences with the program of Simon Benhamou: trunc on a integer i stored as a double
+   can return i or i-1
+ */
+SEXP calculDparhab(SEXP df, SEXP hab, SEXP xll, SEXP yll, SEXP cs, SEXP nrow,
+		   SEXP Lmin, SEXP nombrehab, SEXP PA, SEXP Tmax)
+{
+    SEXP xl, yl, tem, typpas, habp, Nc, Dh, dfso, PAtmp, PA2;
+    int i, k, nlocs, lp;
+    double t1, t2, l1, l2, xt, yt, delta2, tau, xll2, yll2;
+
+    k = INTEGER(nombrehab)[0];
+    nlocs = length(VECTOR_ELT(df,0));
+    tau = REAL(cs)[0]/100.0;
+
+    PROTECT(xl = coerceVector(VECTOR_ELT(df,0), REALSXP));
+    PROTECT(yl = coerceVector(VECTOR_ELT(df,1), REALSXP));
+    PROTECT(tem = coerceVector(VECTOR_ELT(df,2), REALSXP));
+    PROTECT(typpas = allocVector(INTSXP, nlocs-1));
+    PROTECT(habp = allocVector(INTSXP, k+1));
+    lp = length(PA);
+    PROTECT(PAtmp = allocVector(REALSXP, nlocs));
+    PROTECT(PA2 = coerceVector(PA, REALSXP));
+
+    /* From center to the corner of lower left pixel */
+    xll2 = REAL(xll)[0] - (REAL(cs)[0]/2.0);
+    yll2 = REAL(yll)[0] - (REAL(cs)[0]/2.0);
+
+    /*  Take into account the proportion of activity time */
+    if (lp > 1) {
+	REAL(PAtmp)[0] = 0.0;
+	for (i = 1; i < nlocs; i++) {
+	    REAL(PAtmp)[i] = REAL(PAtmp)[i-1] + (REAL(PA2)[i-1] * (REAL(tem)[i] - REAL(tem)[i-1]));
+	}	
+    } else {
+	for (i = 0; i < nlocs; i++) {
+	    REAL(PAtmp)[i] = REAL(tem)[i];
+	}
+    }
+    
+    
+    /* for each step */
+    for (i = 0; i < nlocs-1; i++) {
+	INTEGER(typpas)[i] = HBTl(xl, yl, PAtmp, hab, nrow, cs, xll2, yll2, k, i);
+    }
+    
+    
+    /* calculates the D coefficient */
+    PROTECT(Nc = allocVector(INTSXP, k));
+    PROTECT(Dh = allocVector(REALSXP, k));
+
+    for (i = 0; i < k; i++) {
+	REAL(Dh)[i] = 0.0;
+	INTEGER(Nc)[i] = 0;
+    }
+    
+    for (i = 0; i < (nlocs-2); i++) { 
+	if ((INTEGER(typpas)[i+1] != NA_INTEGER)&&
+	    (INTEGER(typpas)[i+1] == INTEGER(typpas)[i])) {
+	    l2 = pythag(REAL(xl)[i+2] - REAL(xl)[i+1], REAL(yl)[i+2] - REAL(yl)[i+1]);
+	    l1 = pythag(REAL(xl)[i+1] - REAL(xl)[i], REAL(yl)[i+1] - REAL(yl)[i]);
+	    t2 = REAL(PAtmp)[i+2] - REAL(PAtmp)[i+1];
+	    t1 = REAL(PAtmp)[i+1] - REAL(PAtmp)[i];
+	    if (t1 > 0.0000000001) {
+		if (t2 > 0.0000000001) {
+		    if ((REAL(tem)[i+2]-REAL(tem)[i]) < REAL(Tmax)[0]) {
+			if (t1 < 2.0 * t2) {
+			    if (t1 > t2/2.0) {
+				if (l1 <  2.0 * l2) {
+				    if (l1 >  l2/2.0) {
+					if (l1 > REAL(Lmin)[0]) {
+					    if (l2 > REAL(Lmin)[0]) {
+						xt = REAL(xl)[i] + (REAL(xl)[i+2] - 
+								    REAL(xl)[i])*(t1/(t1+t2));
+						yt = REAL(yl)[i] + (REAL(yl)[i+2] - 
+								    REAL(yl)[i])*(t1/(t1+t2));
+						delta2 = R_pow((xt - REAL(xl)[i+1]), 2.0) + 
+						    R_pow((yt - REAL(yl)[i+1]), 2.0);
+						REAL(Dh)[INTEGER(typpas)[i]] = 
+						    REAL(Dh)[INTEGER(typpas)[i]] +
+						    (delta2*((1.0/t1) + (1.0/t2)));
+						INTEGER(Nc)[INTEGER(typpas)[i]]++;
+					    }
+					}
+				    }
+				}
+			    }
+			}
+		    }
+		}
+	    }
+	}
+    }
+    
+    for (i = 0; i < k; i++) {
+	REAL(Dh)[i] = 
+	    REAL(Dh)[i] / 
+	    (4.0 * ((double) INTEGER(Nc)[i]));	    
+    }
+
+    PROTECT(dfso = allocVector(VECSXP, 2));
+    SET_VECTOR_ELT(dfso, 0, Nc);
+    SET_VECTOR_ELT(dfso, 1, Dh);
+
+
+    UNPROTECT(10);
+    return(dfso);    
+}
+
+/* **********************************************************
+
+
+********************************************************** */
+
+/* Calcul D par maximum de vraisemblance */
+
+double calcv(SEXP xl, SEXP yl, SEXP da, double D, SEXP pc)
+{
+    int n, i,k;
+    double vrais, d, T, t;
+    
+    n = length(xl);
+    vrais = 0.0;
+    k = 0;
+    for (i = 1; i < n-1; i++) {
+	if (k == 0) {
+	    if (INTEGER(pc)[i] == 1) {
+		T = REAL(da)[i+1]-REAL(da)[i-1];
+		t = REAL(da)[i]-REAL(da)[i-1];
+		d = pythag(REAL(xl)[i] - REAL(xl)[i-1] - (t/T)*(REAL(xl)[i+1] - REAL(xl)[i-1]),
+			   REAL(yl)[i] - REAL(yl)[i-1] - (t/T)*(REAL(yl)[i+1] - REAL(yl)[i-1]));
+		vrais = vrais + log(T/(4.0*M_PI*D*t*(T-t))) - R_pow(d,2.0)/(4.0*D*t*(T-t)/T);
+		k++;
+	    } 
+	} else {
+	    k=0;
+	}
+    }
+    return(vrais);
+}
+
+
+double compteN(SEXP xl, SEXP pc)
+{
+    int n, i,k, cons;
+    
+    n = length(xl);
+    k = 1;
+    cons=0;
+    for (i = 1; i < n-1; i++) {
+	if (k == 0) {
+	    if (INTEGER(pc)[i] == 1) {
+		cons++;
+		k++;
+	    } 
+	} else {
+	    k=0;
+	}
+    }
+    return((double) cons);
+}
+
+
+SEXP Dmv(SEXP df, SEXP Dr, SEXP pcr)
+{
+    SEXP xl, yl, da, D, sor, pc;
+    double fx1, fx2, fx3, fx4, x1, x2, x3, x4, phi, z, tmp;
+    int n, ndr, conv;
+    
+    ndr = length(Dr);
+    PROTECT(D = coerceVector(Dr, REALSXP));
+    PROTECT(pc = coerceVector(pcr, INTSXP));
+    PROTECT(xl = coerceVector(VECTOR_ELT(df,0), REALSXP));
+    PROTECT(yl = coerceVector(VECTOR_ELT(df,1), REALSXP));
+    PROTECT(da = coerceVector(VECTOR_ELT(df,2), REALSXP));
+    PROTECT(sor = allocVector(REALSXP, 2));
+    
+    /* Golden section search */
+    x1 = REAL(D)[0];
+    x3 = REAL(D)[1];
+    phi = (-1.0 + sqrt(5.0))/2.0;
+    fx1 = calcv(xl, yl, da, x1, pc);
+    fx3 = calcv(xl, yl, da, x3, pc);
+    
+    conv = 0;
+    while (!conv) {
+	x2 = x3 - phi*(x3-x1);
+	x4 = x1 + phi*(x3-x1);
+	fx2 = calcv(xl, yl, da, x2, pc);
+	fx4 = calcv(xl, yl, da, x4, pc);
+
+	if (fx2 < fx4) {
+	    x1 = x2;
+	    fx1 = fx2;
+	} else {
+	    x3 = x4;
+	}
+	if (fabs(x3-x1)<0.00000001) {
+	    conv = 1;
+	    x4 = (x3+x1)/2.0;
+	}
+    }
+    REAL(sor)[0] = compteN(xl, pc);
+    REAL(sor)[1] = x4;
+
+
+    UNPROTECT(6);
+    return(sor);
+}

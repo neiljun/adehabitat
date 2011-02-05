@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <R.h>
+#include <Rinternals.h>
 #include <Rmath.h>
 
 
@@ -2848,3 +2849,93 @@ void acfangl (double *sim, double *ang, int *nang, double *angper, int *nbobs, i
 
 }
 
+
+
+
+
+
+/* *********************************************************************
+ *                                                                     *
+ *                       Rasterizing a trajectory                      *
+ *                                                                     *
+ ***********************************************************************/
+
+
+
+
+SEXP RasterPas(SEXP df, SEXP xllr, SEXP yllr, SEXP cs, SEXP type1)
+{
+    int npas, i, j, nso, k;
+    SEXP xl, yl, resu, so, xso, yso, dfso;
+    double x1, y1, x2, y2, 
+	xc, yc, dist, xt, yt, csi, xll, yll;
+    
+    npas = length(VECTOR_ELT(df,0)) - 1;
+    csi = REAL(cs)[0];
+    nso = INTEGER(type1)[0];
+    xll = REAL(xllr)[0];
+    yll = REAL(yllr)[0];
+    
+    PROTECT(xl = coerceVector(VECTOR_ELT(df,0), REALSXP));
+    PROTECT(yl = coerceVector(VECTOR_ELT(df,1), REALSXP));
+    
+    
+    if (nso > 0) {
+	PROTECT(xso = allocVector(REALSXP, nso));
+	PROTECT(yso = allocVector(REALSXP, nso));
+	PROTECT(so = allocVector(REALSXP, nso));
+    }
+    
+    nso = 0;
+    
+    for (i = 0; i < npas; i++) {
+	
+	/* premier filtre */
+	x1 = REAL(xl)[i];
+	x2 = REAL(xl)[i+1];
+	y1 = REAL(yl)[i];
+	y2 = REAL(yl)[i+1];
+	
+	/* identification des coordonnées initiales et finales */	
+	dist = pythag(x2-x1, y2-y1);
+	k = (int) round(50.0*dist/csi);
+	if (k == 0)
+	    k++;
+	xc = -230876.0;
+	yc = -230876.0;
+	
+	for (j = 0; j<k; j++) {
+	    yt = y1 + ((double) j)*(y2-y1)/((double) k);
+	    xt = x1 + ((double) j)*(x2-x1)/((double) k);
+	    xt = xll + round((xt - xll)/csi)*csi;
+	    yt = yll + round((yt - yll)/csi)*csi;
+	    if (pythag(yt - yc, xt - xc) > 0.00000000001) {
+		xc = xt;
+		yc = yt;
+		if (INTEGER(type1)[0] != 0) {
+		    REAL(xso)[nso] = xc;
+		    REAL(yso)[nso] = yc;
+		    REAL(so)[nso] = ((double) (i+1));
+		} 
+		nso++;
+	    }
+	}
+    }
+    
+    if (INTEGER(type1)[0] != 0) {
+	PROTECT(dfso = allocVector(VECSXP, 3));
+    	SET_VECTOR_ELT(dfso, 0, xso);
+	SET_VECTOR_ELT(dfso, 1, yso);
+	SET_VECTOR_ELT(dfso, 2, so);
+	UNPROTECT(6);
+	
+	return(dfso);
+    } else {
+	PROTECT(resu = allocVector(INTSXP, 1));
+	INTEGER(resu)[0] = nso;
+	PROTECT(dfso = RasterPas(df, xllr, yllr, cs, resu));
+	UNPROTECT(4);
+	return(dfso);
+    }
+
+}
