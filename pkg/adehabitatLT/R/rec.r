@@ -26,15 +26,15 @@ rec <- function(x, slsp=c("remove","missing"))
     slsp <- match.arg(slsp)
     if (attr(x,"typeII")) {
         y <- .traj2df(.ltraj2traj(x))
-        if (!is.null(infolocs(x))) {
-            infol <- do.call("rbind", infolocs(x))
+        if (!is.null(lif)) {
+            infol <- do.call("rbind", lif)
             al <- as.ltraj(xy=y[,c("x","y")], date=y$date,
                            id=y$id, burst=y$burst, slsp=slsp,
                            typeII=TRUE, infolocs=infol)
         } else {
             al <- as.ltraj(xy=y[,c("x","y")], date=y$date,
                            id=y$id, burst=y$burst, slsp=slsp,
-                           typeII=TRUE)
+                           typeII=TRUE, infolocs=lif)
         }
         return(al)
     } else {

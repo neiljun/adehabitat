@@ -17,7 +17,7 @@ the {\tt adehabitatHR} Package }
   Office national de la classe et de la faune
   sauvage\\
   Saint Benoist -- 78610 Auffargis -- France.}
-\date{Jan 2011}
+\date{Feb 2011}
 
 \begin{document}
 
@@ -537,7 +537,7 @@ hrs <- mcp.area(puechabonsp$relocs[,1], percent=seq(50, 100, by = 5))
 
 
 Here, except for Calou, the choice to exclude 5\% of the relocations
-seems a sensible one.  In the case of Calou, it is disputable to
+seems a sensible one.  In the case of Calou, it is disputable
 to remove 20\% of the relocations to achieve an asymptote in the home
 range size decrease.  20\% of the time spent in an area is no longer an
 exceptionnal activity... and this area could be considered as part of

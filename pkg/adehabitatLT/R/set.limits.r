@@ -1,3 +1,50 @@
+.mat <- function(ref, obs)
+{
+    obscons <- obs
+    ## beginning after
+    rea <- sapply(1:length(ref), function(i) {
+        if (i>1) {
+            rr <- ref[-c(1:(i-1))]
+        } else {
+            rr <- ref
+        }
+        sum(rr[1:min(c(length(rr), length(obs)))]==obs[1:min(c(length(rr), length(obs)))])
+    })
+
+    ## beginning before
+    reb <- sapply(1:length(obs), function(i) {
+        if (i>1) {
+            rr <- obs[-c(1:(i-1))]
+        } else {
+            rr <- obs
+        }
+        sum(rr[1:min(c(length(rr), length(ref)))]==ref[1:min(c(length(rr), length(ref)))])
+    })
+
+    b <- which.max(c(max(rea), max(reb)))
+    if (b==1) {
+        rajnadeb <- which.max(rea)-1
+        indicedebobs <- 1
+        if (rajnadeb>0)
+            obs <- c(ref[1:rajnadeb], obs)
+    } else {
+        rajnadeb <- 0
+        indicedebobs <- which.max(reb)
+        obs <- obs[indicedebobs:length(obs)]
+    }
+
+    ## Et pour la fin:
+    rajnafin <- max(length(ref)-length(obs), 0)
+    indicefinobs <- length(obscons)-max(length(obs)-length(ref),0)
+
+
+    return(list(rajna=c(rajnadeb, rajnafin),
+                indice=c(indicedebobs,indicefinobs)))
+}
+
+
+
+
 set.limits <- function(ltraj, begin, dur, pattern,
                        units=c("sec", "min", "hour", "day"),
                        tz = "", ...)
@@ -21,6 +68,7 @@ set.limits <- function(ltraj, begin, dur, pattern,
         stop("uncorrect duration")
     dat <- seq(beg, en, by=dt)
     class(dat) <- c("POSIXct", "POSIXt")
+    datrefc <- dat
     dat <- as.POSIXlt(dat, tz)
     class(dat) <- "list"
 
@@ -33,90 +81,34 @@ set.limits <- function(ltraj, begin, dur, pattern,
     res <- lapply(ltraj, function(x) {
         da <- as.POSIXlt(x$date, tz)
         infol <- attr(x, "infolocs")
-
         dact <- as.numeric(as.POSIXct(da, tz))
         class(da) <- "list"
-
         foctraj <- do.call("paste", da[amodif])
-        deds <- (reftraj%in%foctraj)
-        re <- x
+        licom <- .mat(reftraj, foctraj)
 
-        if (any(!deds)) {
-            avt <- cumsum(deds)
-            avt <- length(avt[avt==0])
-            if (avt > 0) {
-                av <- as.data.frame(matrix(NA,ncol=ncol(x), nrow=avt))
-                if (!is.null(infol)) {
-                    av2 <- as.data.frame(matrix(NA,ncol=ncol(infol), nrow=avt))
-                    names(av2) <- names(infol)
-                    infol <- rbind(av2,infol)
-                }
-                names(av) <- names(x)
-                re <- rbind(av,re)
-                foctraj <- c(reftraj[1:avt],foctraj)
-                dde <- dact[1]
-                aj <- seq(dde,dde-avt*dt, by=-dt)
-                aj <- aj[(length(aj)):2]
-                dact <- c(aj, dact)
-            }
-
-            deds <- deds[(length(deds)):1]
-            apr <- cumsum(deds)
-            apr <- length(apr[apr==0])
-
-            if (apr > 0) {
-                ap <- as.data.frame(matrix(NA,ncol=ncol(x), nrow=apr))
-                names(ap) <- names(x)
-                re <- rbind(re,ap)
-                if (!is.null(infol)) {
-                    ap2 <- as.data.frame(matrix(NA,ncol=ncol(infol), nrow=apr))
-                    names(ap2) <- names(infol)
-                    infol <- rbind(infol, ap2)
-                }
-
-                foctraj <- c(foctraj,
-                             reftraj[((length(reftraj)-
-                                       apr+1):length(reftraj))])
-                fi <- dact[length(dact)]
-                aj <- seq(fi, fi+dt*apr, by=dt)[-1]
-                dact <- c(dact,aj)
-            }
+        ## update the traj
+        arajdeb <- as.data.frame(matrix(NA, ncol=ncol(x), nrow=licom$rajna[1]))
+        arajfin <- as.data.frame(matrix(NA, ncol=ncol(x), nrow=licom$rajna[2]))
+        names(arajdeb) <- names(arajfin) <- names(x)
+        re <- rbind(arajdeb, x[licom$indice[1]:licom$indice[2],], arajfin)
+        re$date <- datrefc
+        ## update the infol
+        if (!is.null(infol)) {
+            arajdeb <- as.data.frame(matrix(NA, ncol=ncol(infol), nrow=licom$rajna[1]))
+            arajfin <- as.data.frame(matrix(NA, ncol=ncol(infol), nrow=licom$rajna[2]))
+            names(arajdeb) <- names(arajfin) <- names(infol)
+            infol2 <- rbind(arajdeb, infol[licom$indice[1]:licom$indice[2],, drop=FALSE], arajfin)
         }
-
-        ## le contraire
-        deds <- (foctraj%in%reftraj)
-        if (any(!deds)) {
-            avt <- cumsum(deds)
-            avt <- length(avt[avt==0])
-            if (avt > 0) {
-                re <- re[-c(1:avt),]
-                if (!is.null(infol)) {
-                    infol <- infol[-c(1:avt),]
-                }
-                dact <- dact[-c(1:avt)]
-            }
-            deds <- deds[(length(deds)):1]
-            apr <- cumsum(deds)
-            apr <- length(apr[apr==0])
-
-            if (apr > 0) {
-                if (!is.null(infol)) {
-                    infol <- infol[-c((nrow(re)-apr+1):nrow(re)),]
-                }
-                re <- re[-c((nrow(re)-apr+1):nrow(re)),]
-                dact <- dact[-c((length(dact)-apr+1):length(dact))]
-            }
-        }
-        class(dact) <- c("POSIXct", "POSIXt")
-        re$date <- dact
         attr(re,"id") <- attr(x,"id")
         attr(re,"burst") <- attr(x,"burst")
-        attr(re,"infolocs") <- infol
+        if (!is.null(infol)) {
+            attr(re,"infolocs") <- infol2
+        }
         return(re)
     })
     class(res) <- c("ltraj","list")
     attr(res, "typeII") <- TRUE
-    attr(res, "regular") <- is.regular(res)
+    attr(res, "regular") <- TRUE
     res <- rec(res,...)
     return(res)
 }

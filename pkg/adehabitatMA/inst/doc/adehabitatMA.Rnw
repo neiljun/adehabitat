@@ -17,7 +17,7 @@ the {\tt adehabitatMA} Package }
   Office national de la classe et de la faune
   sauvage\\
   Saint Benoist -- 78610 Auffargis -- France.}
-\date{Jan 2011}
+\date{Feb 2011}
 
 \begin{document}
 
@@ -667,7 +667,7 @@ animals collected using radio-tracking, or presence indices of animals
 on an area (as is the case for the \texttt{lynxjura} data).  The maps
 therefore represent the environment of the animals.\\
 
-We made programmed two commonly used functions to deal with points and
+We programmed two commonly used functions to deal with points and
 maps:\\
 \begin{itemize}
 \item \texttt{count.points} allows to count the number of points in
